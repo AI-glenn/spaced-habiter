@@ -1,13 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Habit, Rating } from '@/lib/domain/types';
+import { Habit, Rating, RATING_LABEL } from '@/lib/domain/types';
 
 interface Props {
   habit: Habit;
   onRate: (rating: Rating) => void;
   onSkip: () => void;
 }
+
+const RATINGS: Rating[] = ['easy', 'medium', 'hard'];
 
 /**
  * Today-screen card. Three rating buttons + a subtler Skip.
@@ -16,38 +18,37 @@ interface Props {
 export default function HabitCard({ habit, onRate, onSkip }: Props) {
   const [acting, setActing] = useState(false);
 
+  // Short fade so the user sees the action acknowledged before the
+  // list reflows. Respects prefers-reduced-motion via global CSS.
   const trigger = (fn: () => void) => () => {
     if (acting) return;
     setActing(true);
-    // Short fade so the user sees the action acknowledged before the
-    // list reflows. Respects prefers-reduced-motion via global CSS.
     setTimeout(fn, 150);
   };
 
   return (
     <article
-      className={[
-        'card p-5 transition-opacity duration-150',
-        acting ? 'opacity-0' : 'opacity-100',
-      ].join(' ')}
+      className={`card p-5 transition-opacity duration-150 ${
+        acting ? 'opacity-0' : 'opacity-100'
+      }`}
     >
-      <h3 className="text-[19px] font-medium text-ink leading-snug">
-        {habit.name}
-      </h3>
+      <h3 className="text-[19px] font-medium text-ink leading-snug">{habit.name}</h3>
+
       <div className="mt-4 grid grid-cols-3 gap-2">
-        {(['easy', 'medium', 'hard'] as Rating[]).map((r) => (
+        {RATINGS.map((r) => (
           <button
             key={r}
             type="button"
             onClick={trigger(() => onRate(r))}
             className="rounded-lg border border-hairline bg-surface py-3 text-sm font-medium text-ink
                        transition-colors hover:bg-accent-subtle active:bg-accent-subtle"
-            aria-label={`Mark ${habit.name} done — ${r}`}
+            aria-label={`Mark ${habit.name} done — ${RATING_LABEL[r]}`}
           >
-            {r === 'easy' ? 'Easy' : r === 'medium' ? 'Medium' : 'Hard'}
+            {RATING_LABEL[r]}
           </button>
         ))}
       </div>
+
       <div className="mt-3 flex justify-end">
         <button
           type="button"

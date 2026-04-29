@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useAppState } from '@/contexts/AppStateContext';
 import HabitForm, { HabitFormValues } from '@/components/HabitForm';
+import { PRIORITY_LABEL } from '@/lib/domain/types';
 
 export default function HabitsPage() {
   const { state, addHabit } = useAppState();
@@ -64,7 +65,7 @@ export default function HabitsPage() {
                 <div>
                   <p className="text-[17px] font-medium text-ink">{h.name}</p>
                   <p className="mt-0.5 text-sm text-ink-muted">
-                    {h.weeklyTarget}× / week · {labelForPriority(h.priority)} priority
+                    {h.weeklyTarget}× / week · {PRIORITY_LABEL[h.priority]} priority
                   </p>
                 </div>
                 <span aria-hidden className="text-ink-muted">
@@ -77,8 +78,4 @@ export default function HabitsPage() {
       )}
     </section>
   );
-}
-
-function labelForPriority(p: 'high' | 'medium' | 'low'): string {
-  return p === 'high' ? 'High' : p === 'medium' ? 'Medium' : 'Low';
 }

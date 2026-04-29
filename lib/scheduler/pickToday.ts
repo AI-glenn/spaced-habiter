@@ -8,7 +8,7 @@
  * intended to be stable.
  */
 
-import { AppState, DailySchedule, Habit, Priority } from '@/lib/domain/types';
+import { AppState, DailySchedule, Priority } from '@/lib/domain/types';
 import { startOfWeekISO } from '@/lib/domain/week';
 
 const PRIORITY_RANK: Record<Priority, number> = {
@@ -17,46 +17,41 @@ const PRIORITY_RANK: Record<Priority, number> = {
   low: 2,
 };
 
-/** Number of completions for `habit` in the week containing `date`. */
-export function completionsThisWeek(
-  state: AppState,
-  habitId: string,
-  date: string,
-): number {
-  const weekStart = startOfWeekISO(date);
-  return state.completions.filter(
-    (c) => c.habitId === habitId && startOfWeekISO(c.date) === weekStart,
-  ).length;
-}
-
 /**
  * Build today's schedule for `date`. Pure function over AppState.
  * Result is sized at most `state.settings.dailyCapacity`.
  */
 export function pickToday(state: AppState, date: string): DailySchedule {
-  const candidates = state.habits.filter(
-    (h) => completionsThisWeek(state, h.id, date) < h.weeklyTarget,
-  );
+  const completedThisWeek = countCompletionsThisWeek(state, date);
+  const completed = (id: string) => completedThisWeek.get(id) ?? 0;
 
-  const ranked = [...candidates].sort((a, b) => {
-    const tier = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
-    if (tier !== 0) return tier;
-    const aUrgency = a.weeklyTarget - completionsThisWeek(state, a.id, date);
-    const bUrgency = b.weeklyTarget - completionsThisWeek(state, b.id, date);
-    const aScore = aUrgency * a.ease;
-    const bScore = bUrgency * b.ease;
-    if (bScore !== aScore) return bScore - aScore;
-    // Stable tiebreak: oldest habit first.
-    return a.createdAt.localeCompare(b.createdAt);
-  });
+  const ranked = state.habits
+    .filter((h) => completed(h.id) < h.weeklyTarget)
+    .sort((a, b) => {
+      const tier = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+      if (tier !== 0) return tier;
+      const aScore = (a.weeklyTarget - completed(a.id)) * a.ease;
+      const bScore = (b.weeklyTarget - completed(b.id)) * b.ease;
+      if (bScore !== aScore) return bScore - aScore;
+      // Stable tiebreak: oldest habit first.
+      return a.createdAt.localeCompare(b.createdAt);
+    });
 
   const habitIds = ranked
     .slice(0, Math.max(1, state.settings.dailyCapacity))
-    .map((h: Habit) => h.id);
+    .map((h) => h.id);
 
-  return {
-    date,
-    habitIds,
-    generatedAt: new Date().toISOString(),
-  };
+  return { date, habitIds, generatedAt: new Date().toISOString() };
+}
+
+/** Map of habitId -> completion count for the week containing `date`. */
+function countCompletionsThisWeek(state: AppState, date: string): Map<string, number> {
+  const weekStart = startOfWeekISO(date);
+  const counts = new Map<string, number>();
+  for (const c of state.completions) {
+    if (startOfWeekISO(c.date) === weekStart) {
+      counts.set(c.habitId, (counts.get(c.habitId) ?? 0) + 1);
+    }
+  }
+  return counts;
 }

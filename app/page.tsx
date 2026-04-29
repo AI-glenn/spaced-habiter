@@ -8,64 +8,38 @@ import HabitCard from '@/components/HabitCard';
 import ConfirmDialog from '@/components/ConfirmDialog';
 
 export default function TodayPage() {
-  const {
-    state,
-    hydrated,
-    rateToday,
-    skipToday,
-    regenerateToday,
-  } = useAppState();
+  const { state, hydrated, rateToday, skipToday, regenerateToday } = useAppState();
   const [confirmRegen, setConfirmRegen] = useState(false);
-
   const today = todayISO();
-  const schedule = state.todaySchedule;
-  const totalScheduled = schedule?.habitIds.length ?? 0;
 
-  const { active, doneCount } = useMemo(() => {
-    if (!schedule) return { active: [], doneCount: 0 };
-    const completedIds = new Set(
-      state.completions.filter((c) => c.date === today).map((c) => c.habitId),
-    );
-    const skippedIds = new Set(
-      state.skips.filter((s) => s.date === today).map((s) => s.habitId),
-    );
-    const actedIds = new Set([...completedIds, ...skippedIds]);
-    const habitsById = new Map(state.habits.map((h) => [h.id, h]));
-    const active = schedule.habitIds
-      .filter((id) => !actedIds.has(id))
-      .map((id) => habitsById.get(id))
-      .filter((h): h is NonNullable<typeof h> => Boolean(h));
-    return { active, doneCount: actedIds.size };
-  }, [schedule, state.completions, state.skips, state.habits, today]);
+  const { active, doneCount, totalScheduled } = useTodayView(state, today);
 
-  if (!hydrated) {
-    return (
-      <Header date={today}>
-        <p className="text-ink-muted">Loading…</p>
-      </Header>
-    );
-  }
-
-  const hasAnyHabits = state.habits.length > 0;
-  const allDone = totalScheduled > 0 && active.length === 0;
-  const nothingScheduled = hasAnyHabits && totalScheduled === 0;
+  const handleRegenerate = () => {
+    if (doneCount > 0) setConfirmRegen(true);
+    else regenerateToday();
+  };
 
   return (
-    <Header date={today}>
-      {!hasAnyHabits && (
-        <EmptyNoHabits />
-      )}
+    <section className="pb-8">
+      <header className="mb-6">
+        <p className="text-sm text-ink-muted">Today</p>
+        <h1 className="text-[26px] font-medium leading-tight text-ink">
+          {formatLongDate(today)}
+        </h1>
+      </header>
 
-      {hasAnyHabits && nothingScheduled && (
+      {!hydrated ? (
+        <p className="text-ink-muted">Loading…</p>
+      ) : state.habits.length === 0 ? (
+        <EmptyNoHabits />
+      ) : totalScheduled === 0 ? (
         // TODO(algorithm-thread): empty-day copy depends on what the
         // final scheduler decides to do here.
         <EmptyState
           title="Nothing scheduled today"
           subtitle="Nice work — you’re on track for the week."
         />
-      )}
-
-      {hasAnyHabits && totalScheduled > 0 && (
+      ) : (
         <>
           <ul className="space-y-3">
             {active.map((habit) => (
@@ -79,7 +53,7 @@ export default function TodayPage() {
             ))}
           </ul>
 
-          {allDone && (
+          {active.length === 0 && (
             <div className="card mt-2 p-5 text-center">
               <p className="text-[17px] font-medium text-ink">Done for today</p>
               <p className="mt-1 text-sm text-ink-muted">
@@ -87,25 +61,16 @@ export default function TodayPage() {
               </p>
             </div>
           )}
-        </>
-      )}
 
-      {hasAnyHabits && totalScheduled > 0 && (
-        <div className="mt-8 flex items-center justify-between text-sm text-ink-muted">
-          <span>
-            {doneCount} of {totalScheduled} done
-          </span>
-          <button
-            type="button"
-            className="btn-ghost"
-            onClick={() => {
-              if (doneCount > 0) setConfirmRegen(true);
-              else regenerateToday();
-            }}
-          >
-            Regenerate
-          </button>
-        </div>
+          <div className="mt-8 flex items-center justify-between text-sm text-ink-muted">
+            <span>
+              {doneCount} of {totalScheduled} done
+            </span>
+            <button type="button" className="btn-ghost" onClick={handleRegenerate}>
+              Regenerate
+            </button>
+          </div>
+        </>
       )}
 
       <ConfirmDialog
@@ -125,28 +90,31 @@ export default function TodayPage() {
         }}
         onCancel={() => setConfirmRegen(false)}
       />
-    </Header>
+    </section>
   );
 }
 
-function Header({
-  date,
-  children,
-}: {
-  date: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="pb-8">
-      <header className="mb-6">
-        <p className="text-sm text-ink-muted">Today</p>
-        <h1 className="text-[26px] font-medium leading-tight text-ink">
-          {formatLongDate(date)}
-        </h1>
-      </header>
-      {children}
-    </section>
-  );
+function useTodayView(state: ReturnType<typeof useAppState>['state'], today: string) {
+  return useMemo(() => {
+    const schedule = state.todaySchedule;
+    if (!schedule) return { active: [], doneCount: 0, totalScheduled: 0 };
+
+    const actedIds = new Set<string>();
+    for (const c of state.completions) if (c.date === today) actedIds.add(c.habitId);
+    for (const s of state.skips) if (s.date === today) actedIds.add(s.habitId);
+
+    const habitsById = new Map(state.habits.map((h) => [h.id, h]));
+    const active = schedule.habitIds
+      .filter((id) => !actedIds.has(id))
+      .map((id) => habitsById.get(id))
+      .filter((h): h is NonNullable<typeof h> => Boolean(h));
+
+    return {
+      active,
+      doneCount: actedIds.size,
+      totalScheduled: schedule.habitIds.length,
+    };
+  }, [state.todaySchedule, state.completions, state.skips, state.habits, today]);
 }
 
 function EmptyNoHabits() {

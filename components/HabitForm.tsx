@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
-import { Priority } from '@/lib/domain/types';
+import { Priority, PRIORITY_LABEL } from '@/lib/domain/types';
+import NumberStepper from '@/components/NumberStepper';
 
 export interface HabitFormValues {
   name: string;
@@ -24,11 +25,7 @@ const DEFAULTS: HabitFormValues = {
   priority: 'medium',
 };
 
-const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-];
+const PRIORITIES: Priority[] = ['high', 'medium', 'low'];
 
 export default function HabitForm({
   initialValues = DEFAULTS,
@@ -73,52 +70,27 @@ export default function HabitForm({
         <label htmlFor="habit-weekly-target" className="field-label">
           Weekly target
         </label>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className="btn-secondary px-4"
-            aria-label="Decrease weekly target"
-            onClick={() => setWeeklyTarget((n) => Math.max(1, n - 1))}
-          >
-            −
-          </button>
-          <input
-            id="habit-weekly-target"
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={7}
-            value={weeklyTarget}
-            onChange={(e) => {
-              const n = Number(e.target.value);
-              if (Number.isFinite(n)) {
-                setWeeklyTarget(Math.min(7, Math.max(1, Math.round(n))));
-              }
-            }}
-            className="field-input text-center w-20"
-          />
-          <button
-            type="button"
-            className="btn-secondary px-4"
-            aria-label="Increase weekly target"
-            onClick={() => setWeeklyTarget((n) => Math.min(7, n + 1))}
-          >
-            +
-          </button>
-          <span className="text-sm text-ink-muted">days/week</span>
-        </div>
+        <NumberStepper
+          inputId="habit-weekly-target"
+          value={weeklyTarget}
+          min={1}
+          max={7}
+          onChange={setWeeklyTarget}
+          label="weekly target"
+          unit="days/week"
+        />
       </div>
 
       <div>
         <span className="field-label">Priority</span>
         <div className="grid grid-cols-3 gap-2">
-          {PRIORITY_OPTIONS.map((opt) => {
-            const selected = priority === opt.value;
+          {PRIORITIES.map((p) => {
+            const selected = priority === p;
             return (
               <button
                 type="button"
-                key={opt.value}
-                onClick={() => setPriority(opt.value)}
+                key={p}
+                onClick={() => setPriority(p)}
                 aria-pressed={selected}
                 className={[
                   'rounded-lg border py-2.5 text-sm font-medium transition-colors',
@@ -127,7 +99,7 @@ export default function HabitForm({
                     : 'border-hairline bg-surface text-ink hover:bg-accent-subtle',
                 ].join(' ')}
               >
-                {opt.label}
+                {PRIORITY_LABEL[p]}
               </button>
             );
           })}

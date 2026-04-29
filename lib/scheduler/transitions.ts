@@ -6,53 +6,33 @@
  * once the dedicated algorithm thread completes.
  */
 
-import {
-  AppState,
-  CompletionLogEntry,
-  Habit,
-  Rating,
-  SkipLogEntry,
-} from '@/lib/domain/types';
+import { AppState, Rating } from '@/lib/domain/types';
 
 const EASE_FLOOR = 0.5;
 const EASE_CAP = 3.0;
 
 const clampEase = (x: number) => Math.min(EASE_CAP, Math.max(EASE_FLOOR, x));
 
+const RATING_MULTIPLIER: Record<Rating, number> = {
+  easy: 0.85,
+  medium: 1.0,
+  hard: 1.25,
+};
+
 /** Apply rating-driven ease multiplier (provisional). */
-export function applyRatingToEase(currentEase: number, rating: Rating): number {
-  switch (rating) {
-    case 'easy':
-      return clampEase(currentEase * 0.85);
-    case 'medium':
-      return clampEase(currentEase);
-    case 'hard':
-      return clampEase(currentEase * 1.25);
-  }
-}
+export const applyRatingToEase = (ease: number, rating: Rating): number =>
+  clampEase(ease * RATING_MULTIPLIER[rating]);
 
 /**
  * Apply skip-driven ease multiplier (provisional).
- * Looks at how many consecutive skips precede this one to detect a 2+ streak.
+ * Bumps further when the previous logged event for this habit was also a skip.
  *
  * TODO(algorithm-thread): "consecutive" here means consecutive skip entries
  * in the log without an intervening completion. The real definition (calendar
  * days vs. scheduled days) is an open algorithmic question.
  */
-export function applySkipToEase(
-  currentEase: number,
-  priorSkipsForHabit: SkipLogEntry[],
-  priorCompletionsForHabit: CompletionLogEntry[],
-): number {
-  let next = currentEase * 1.2;
-  // Did the most recent log event for this habit (before today) include a skip?
-  const lastCompletion = priorCompletionsForHabit[priorCompletionsForHabit.length - 1];
-  const lastSkip = priorSkipsForHabit[priorSkipsForHabit.length - 1];
-  const lastWasSkip =
-    !!lastSkip && (!lastCompletion || lastSkip.date > lastCompletion.date);
-  if (lastWasSkip) {
-    next *= 1.5;
-  }
+export function applySkipToEase(ease: number, lastEventWasSkip: boolean): number {
+  const next = ease * 1.2 * (lastEventWasSkip ? 1.5 : 1);
   return clampEase(next);
 }
 
@@ -63,14 +43,12 @@ export function completeHabit(
   date: string,
   rating: Rating,
 ): AppState {
-  const habits = state.habits.map((h: Habit) =>
-    h.id === habitId ? { ...h, ease: applyRatingToEase(h.ease, rating) } : h,
-  );
-  const completion: CompletionLogEntry = { habitId, date, rating };
   return {
     ...state,
-    habits,
-    completions: [...state.completions, completion],
+    habits: state.habits.map((h) =>
+      h.id === habitId ? { ...h, ease: applyRatingToEase(h.ease, rating) } : h,
+    ),
+    completions: [...state.completions, { habitId, date, rating }],
   };
 }
 
@@ -81,17 +59,32 @@ export function skipHabit(
   date: string,
   source: 'manual' | 'auto',
 ): AppState {
-  const priorSkips = state.skips.filter((s) => s.habitId === habitId);
-  const priorCompletions = state.completions.filter((c) => c.habitId === habitId);
-  const habits = state.habits.map((h) =>
-    h.id === habitId
-      ? { ...h, ease: applySkipToEase(h.ease, priorSkips, priorCompletions) }
-      : h,
-  );
-  const skip: SkipLogEntry = { habitId, date, source };
+  const lastEventWasSkip = wasLastEventASkip(state, habitId);
   return {
     ...state,
-    habits,
-    skips: [...state.skips, skip],
+    habits: state.habits.map((h) =>
+      h.id === habitId ? { ...h, ease: applySkipToEase(h.ease, lastEventWasSkip) } : h,
+    ),
+    skips: [...state.skips, { habitId, date, source }],
   };
+}
+
+/** True iff the most recent log entry for `habitId` is a skip (vs. a completion). */
+function wasLastEventASkip(state: AppState, habitId: string): boolean {
+  const lastSkipDate = latestDate(state.skips, habitId);
+  const lastCompletionDate = latestDate(state.completions, habitId);
+  return lastSkipDate !== null && lastSkipDate > (lastCompletionDate ?? '');
+}
+
+function latestDate(
+  entries: ReadonlyArray<{ habitId: string; date: string }>,
+  habitId: string,
+): string | null {
+  let latest: string | null = null;
+  for (const e of entries) {
+    if (e.habitId === habitId && (latest === null || e.date > latest)) {
+      latest = e.date;
+    }
+  }
+  return latest;
 }

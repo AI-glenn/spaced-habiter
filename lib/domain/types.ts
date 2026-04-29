@@ -11,6 +11,18 @@ export type Priority = 'high' | 'medium' | 'low';
 
 export type Rating = 'easy' | 'medium' | 'hard';
 
+export const PRIORITY_LABEL: Record<Priority, string> = {
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+};
+
+export const RATING_LABEL: Record<Rating, string> = {
+  easy: 'Easy',
+  medium: 'Medium',
+  hard: 'Hard',
+};
+
 /** A user-defined habit. */
 export interface Habit {
   id: string;
